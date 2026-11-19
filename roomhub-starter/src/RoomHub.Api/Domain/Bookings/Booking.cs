@@ -12,6 +12,7 @@ public enum BookingStatus
 public sealed class Booking
 {
     public static readonly TimeSpan MaxDuration = TimeSpan.FromHours(4);
+    public const int MaxActiveBookingsPerParticipantPerDay = 2;
 
     // Used by EF Core
     private Booking() { }
@@ -42,7 +43,8 @@ public sealed class Booking
         DateTime endUtc,
         int attendees,
         DateTime nowUtc,
-        IEnumerable<Booking> existingRoomBookings)
+        IEnumerable<Booking> existingRoomBookings,
+        IEnumerable<Booking> existingParticipantBookings)
     {
         startUtc = ToUtc(startUtc);
         endUtc = ToUtc(endUtc);
@@ -74,7 +76,16 @@ public sealed class Booking
         if (existingRoomBookings.Any(b => b.RoomId == room.Id && b.OverlapsWith(startUtc, endUtc)))
             return BookingErrors.RoomOccupied;
 
-        return new Booking(Guid.NewGuid(), room.Id, bookedBy.Trim(), startUtc, endUtc, attendees);
+        // New requirement: max 2 active bookings per participant per UTC day (of startUtc), across all rooms
+        var name = bookedBy.Trim();
+        var activeSameDay = existingParticipantBookings.Count(b =>
+            b.Status == BookingStatus.Active &&
+            b.BookedBy == name &&
+            b.StartUtc.Date == startUtc.Date);
+        if (activeSameDay >= MaxActiveBookingsPerParticipantPerDay)
+            return BookingErrors.DailyLimitReached;
+
+        return new Booking(Guid.NewGuid(), room.Id, name, startUtc, endUtc, attendees);
     }
 
     // R7: only active bookings block; touching intervals do not overlap

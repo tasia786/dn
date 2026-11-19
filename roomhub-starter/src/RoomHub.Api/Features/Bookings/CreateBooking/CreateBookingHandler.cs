@@ -21,11 +21,15 @@ public sealed class CreateBookingHandler(
             return RoomErrors.NotFound;
 
         var existing = await bookings.GetActiveForRoomAsync(room.Id, ct);
+        var participantBookings = string.IsNullOrWhiteSpace(command.BookedBy)
+            ? []
+            : await bookings.GetActiveForBookedByAsync(command.BookedBy.Trim(), ct);
         var nowUtc = timeProvider.GetUtcNow().UtcDateTime;
 
-        // All business rules (R2–R7) live in the domain
+        // All business rules (R2–R7 + daily limit per participant) live in the domain
         var result = Booking.Create(
-            room, command.BookedBy, command.StartUtc, command.EndUtc, command.Attendees, nowUtc, existing);
+            room, command.BookedBy, command.StartUtc, command.EndUtc, command.Attendees, nowUtc,
+            existing, participantBookings);
         if (result.IsFailure)
             return result.Error;
 
