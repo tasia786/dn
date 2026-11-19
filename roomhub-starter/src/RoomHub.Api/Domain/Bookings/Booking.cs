@@ -11,7 +11,7 @@ public enum BookingStatus
 
 public sealed class Booking
 {
-    public static readonly TimeSpan MaxDuration = TimeSpan.FromHours(4);
+    public static readonly TimeSpan MinCancellationNotice = TimeSpan.FromMinutes(60);
     public const int MaxActiveBookingsPerParticipantPerDay = 2;
 
     // Used by EF Core
@@ -68,9 +68,9 @@ public sealed class Booking
         if (startUtc < nowUtc)
             return BookingErrors.StartInPast;
 
-        // R6 (exactly 4 hours is allowed)
-        if (endUtc - startUtc > MaxDuration)
-            return BookingErrors.TooLong;
+        // R6 + R10: max 4 hours, or max 2 hours for rooms with capacity > 10 (the exact limit is allowed)
+        if (endUtc - startUtc > room.MaxBookingDuration)
+            return room.IsLarge ? BookingErrors.TooLongForLargeRoom : BookingErrors.TooLong;
 
         // R7
         if (existingRoomBookings.Any(b => b.RoomId == room.Id && b.OverlapsWith(startUtc, endUtc)))
@@ -92,11 +92,15 @@ public sealed class Booking
     public bool OverlapsWith(DateTime startUtc, DateTime endUtc) =>
         Status == BookingStatus.Active && StartUtc < endUtc && startUtc < EndUtc;
 
-    // R8
-    public Result Cancel()
+    // R8 + R11
+    public Result Cancel(DateTime nowUtc)
     {
         if (Status == BookingStatus.Cancelled)
             return BookingErrors.AlreadyCancelled;
+
+        // R11: allowed only if the booking starts at least 60 minutes from now
+        if (StartUtc - nowUtc < MinCancellationNotice)
+            return BookingErrors.TooLateToCancel;
 
         Status = BookingStatus.Cancelled;
         return Result.Success();

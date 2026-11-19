@@ -30,5 +30,14 @@ public sealed class Room
         return new Room(Guid.NewGuid(), name.Trim(), capacity);
     }
 
+    public const int LargeRoomCapacityThreshold = 10;
+    public static readonly TimeSpan StandardMaxBookingDuration = TimeSpan.FromHours(4);
+    public static readonly TimeSpan LargeRoomMaxBookingDuration = TimeSpan.FromHours(2);
+
     public bool CanHost(int attendees) => attendees <= Capacity;
+
+    public bool IsLarge => Capacity > LargeRoomCapacityThreshold;
+
+    // R6 + R10: rooms with capacity > 10 can be booked for at most 2 hours, the others for at most 4 hours
+    public TimeSpan MaxBookingDuration => IsLarge ? LargeRoomMaxBookingDuration : StandardMaxBookingDuration;
 }
