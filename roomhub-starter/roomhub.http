@@ -1,0 +1,301 @@
+### Variables
+@baseUrl = http://localhost:5090
+
+### 1. Create room
+# @name createRoom
+POST {{baseUrl}}/api/rooms
+Content-Type: application/json
+
+{
+  "name": "Study room 1",
+  "capacity": 10
+}
+
+###
+@roomId = {{createRoom.response.body.$.id}}
+
+### 2. Get room
+GET {{baseUrl}}/api/rooms/{{roomId}}
+
+### 3. Get a missing room (expected: 404)
+GET {{baseUrl}}/api/rooms/00000000-0000-0000-0000-000000000001
+
+### 4. Create booking (change the dates to the future!)
+# @name createBooking
+POST {{baseUrl}}/api/rooms/{{roomId}}/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "ana",
+  "startUtc": "2030-01-10T10:00:00Z",
+  "endUtc": "2030-01-10T12:00:00Z",
+  "attendees": 4
+}
+
+###
+@bookingId = {{createBooking.response.body.$.id}}
+
+### 5. Get booking
+GET {{baseUrl}}/api/bookings/{{bookingId}}
+
+### 6. Overlapping booking (expected: 409)
+POST {{baseUrl}}/api/rooms/{{roomId}}/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "bogdan",
+  "startUtc": "2030-01-10T11:00:00Z",
+  "endUtc": "2030-01-10T13:00:00Z",
+  "attendees": 4
+}
+
+### 7. Cancel booking
+POST {{baseUrl}}/api/bookings/{{bookingId}}/cancel
+
+### 8. Add your own requests here for the rules in ASSIGNMENT.md
+# Run the requests in order, top to bottom.
+# Data is stored in SQLite and survives restarts: to start from a clean state,
+# stop the app and delete src/RoomHub.Api/roomhub.db before running the file again.
+
+### R8. Cancel an already cancelled booking (expected: 409)
+POST {{baseUrl}}/api/bookings/{{bookingId}}/cancel
+
+### R8. Cancel a missing booking (expected: 404)
+POST {{baseUrl}}/api/bookings/00000000-0000-0000-0000-000000000001/cancel
+
+### R8. A cancelled booking frees its interval (same interval as request 4, expected: 201)
+POST {{baseUrl}}/api/rooms/{{roomId}}/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "carla",
+  "startUtc": "2030-01-10T10:00:00Z",
+  "endUtc": "2030-01-10T12:00:00Z",
+  "attendees": 4
+}
+
+### R7. Touching interval: starts exactly when the previous one ends (expected: 201)
+POST {{baseUrl}}/api/rooms/{{roomId}}/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "dan",
+  "startUtc": "2030-01-10T12:00:00Z",
+  "endUtc": "2030-01-10T13:00:00Z",
+  "attendees": 4
+}
+
+### R7. Touching interval: ends exactly when the previous one starts (expected: 201)
+POST {{baseUrl}}/api/rooms/{{roomId}}/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "dan",
+  "startUtc": "2030-01-10T09:00:00Z",
+  "endUtc": "2030-01-10T10:00:00Z",
+  "attendees": 4
+}
+
+### R1. Room with an empty name (expected: 400)
+POST {{baseUrl}}/api/rooms
+Content-Type: application/json
+
+{
+  "name": "   ",
+  "capacity": 10
+}
+
+### R1. Room with capacity 0 (expected: 400)
+POST {{baseUrl}}/api/rooms
+Content-Type: application/json
+
+{
+  "name": "Study room X",
+  "capacity": 0
+}
+
+### Booking in a missing room, with an invalid body (expected: 404, not 400)
+POST {{baseUrl}}/api/rooms/00000000-0000-0000-0000-000000000001/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "",
+  "startUtc": "2030-03-01T10:00:00Z",
+  "endUtc": "2030-03-01T09:00:00Z",
+  "attendees": 0
+}
+
+### R2. Missing bookedBy (expected: 400)
+POST {{baseUrl}}/api/rooms/{{roomId}}/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "",
+  "startUtc": "2030-03-01T10:00:00Z",
+  "endUtc": "2030-03-01T11:00:00Z",
+  "attendees": 4
+}
+
+### R3. End equal to start (expected: 400)
+POST {{baseUrl}}/api/rooms/{{roomId}}/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "emil",
+  "startUtc": "2030-03-01T10:00:00Z",
+  "endUtc": "2030-03-01T10:00:00Z",
+  "attendees": 4
+}
+
+### R4. Zero attendees (expected: 400)
+POST {{baseUrl}}/api/rooms/{{roomId}}/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "emil",
+  "startUtc": "2030-03-01T10:00:00Z",
+  "endUtc": "2030-03-01T11:00:00Z",
+  "attendees": 0
+}
+
+### R4. More attendees than the room capacity (capacity is 10, expected: 400)
+POST {{baseUrl}}/api/rooms/{{roomId}}/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "emil",
+  "startUtc": "2030-03-01T10:00:00Z",
+  "endUtc": "2030-03-01T11:00:00Z",
+  "attendees": 11
+}
+
+### R5. Booking that starts in the past (expected: 400)
+POST {{baseUrl}}/api/rooms/{{roomId}}/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "emil",
+  "startUtc": "2020-03-01T10:00:00Z",
+  "endUtc": "2020-03-01T11:00:00Z",
+  "attendees": 4
+}
+
+### R6. Longer than 4 hours (expected: 400)
+POST {{baseUrl}}/api/rooms/{{roomId}}/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "emil",
+  "startUtc": "2030-03-01T10:00:00Z",
+  "endUtc": "2030-03-01T14:00:01Z",
+  "attendees": 4
+}
+
+### R6. Exactly 4 hours is allowed (expected: 201)
+POST {{baseUrl}}/api/rooms/{{roomId}}/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "emil",
+  "startUtc": "2030-03-01T10:00:00Z",
+  "endUtc": "2030-03-01T14:00:00Z",
+  "attendees": 4
+}
+
+### New requirement: max 2 active bookings per participant per UTC day, across all rooms
+# Create a second room
+# @name createRoom2
+POST {{baseUrl}}/api/rooms
+Content-Type: application/json
+
+{
+  "name": "Study room 2",
+  "capacity": 6
+}
+
+###
+@room2Id = {{createRoom2.response.body.$.id}}
+
+### Daily limit: 1st booking of "maria" on 2030-04-01, room 1 (expected: 201)
+# @name mariaFirst
+POST {{baseUrl}}/api/rooms/{{roomId}}/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "maria",
+  "startUtc": "2030-04-01T08:00:00Z",
+  "endUtc": "2030-04-01T09:00:00Z",
+  "attendees": 2
+}
+
+###
+@mariaFirstId = {{mariaFirst.response.body.$.id}}
+
+### Daily limit: 2nd booking of "maria" on 2030-04-01, room 2 (expected: 201)
+POST {{baseUrl}}/api/rooms/{{room2Id}}/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "maria",
+  "startUtc": "2030-04-01T10:00:00Z",
+  "endUtc": "2030-04-01T11:00:00Z",
+  "attendees": 2
+}
+
+### Daily limit: 3rd booking of "maria" on the same day (expected: 409)
+POST {{baseUrl}}/api/rooms/{{roomId}}/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "maria",
+  "startUtc": "2030-04-01T14:00:00Z",
+  "endUtc": "2030-04-01T15:00:00Z",
+  "attendees": 2
+}
+
+### Daily limit: the day is the UTC date of startUtc, a booking ending on the next day still counts (expected: 409)
+POST {{baseUrl}}/api/rooms/{{room2Id}}/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "maria",
+  "startUtc": "2030-04-01T23:00:00Z",
+  "endUtc": "2030-04-02T01:00:00Z",
+  "attendees": 2
+}
+
+### Daily limit: another participant on the same day is not affected (expected: 201)
+POST {{baseUrl}}/api/rooms/{{roomId}}/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "ion",
+  "startUtc": "2030-04-01T14:00:00Z",
+  "endUtc": "2030-04-01T15:00:00Z",
+  "attendees": 2
+}
+
+### Daily limit: "maria" on a different day is not affected (expected: 201)
+POST {{baseUrl}}/api/rooms/{{roomId}}/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "maria",
+  "startUtc": "2030-04-02T08:00:00Z",
+  "endUtc": "2030-04-02T09:00:00Z",
+  "attendees": 2
+}
+
+### Daily limit: cancel the 1st booking of "maria" (expected: 204)
+POST {{baseUrl}}/api/bookings/{{mariaFirstId}}/cancel
+
+### Daily limit: cancelled bookings do not count, a new one on 2030-04-01 is accepted (expected: 201)
+POST {{baseUrl}}/api/rooms/{{room2Id}}/bookings
+Content-Type: application/json
+
+{
+  "bookedBy": "maria",
+  "startUtc": "2030-04-01T16:00:00Z",
+  "endUtc": "2030-04-01T17:00:00Z",
+  "attendees": 2
+}
